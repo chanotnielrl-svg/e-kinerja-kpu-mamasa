@@ -246,6 +246,14 @@
                             <p class="text-sm" id="print-subtitle">Bulan: -</p>
                         </div>
 
+                        <!-- Data Pegawai untuk PDF -->
+                        <div id="print-pegawai-info" class="mb-4 text-sm hidden no-screen-kop">
+                            <table>
+                                <tr><td class="font-bold pr-4">Nama</td><td>: <span id="print-nama"></span></td></tr>
+                                <tr><td class="font-bold pr-4">Jabatan</td><td>: <span id="print-jabatan"></span></td></tr>
+                            </table>
+                        </div>
+
                         <table class="w-full text-sm border-collapse border border-gray-400">
                             <thead class="bg-gray-100">
                                 <tr>
@@ -255,8 +263,8 @@
                                     <th class="border border-gray-400 p-2">Rencana Aksi</th>
                                     <th class="border border-gray-400 p-2">Waktu</th>
                                     <th class="border border-gray-400 p-2">Uraian</th>
-                                    <th class="border border-gray-400 p-2">Total Jam</th>
-                                    <th class="border border-gray-400 p-2">Status</th>
+                                    <th class="border border-gray-400 p-2">Durasi Kegiatan</th>
+                                    <th class="border border-gray-400 p-2">Total Jam Harian & Status</th>
                                 </tr>
                             </thead>
                             <tbody id="table-rekap">
@@ -297,7 +305,7 @@
 
     <script>
         // MASUKKAN URL GOOGLE APPS SCRIPT WEB APP ANDA DI SINI
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbx6CrLOmkZjeDM3sIQ_QmkoRbJf6DWUK_aNkb0wAGp0IZM_8mPmrK68Y99dJmB4H-s/exec"; // <-- GANTI DENGAN URL DEPLOYMENT GAS ANDA
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzb6i5T11ThpIsKBB8vgUhf_O9y_miTQL7A_2ci2NNKz_PPW9qimsKq_Zdp3GOrlgY/exec"; // <-- GANTI DENGAN URL DEPLOYMENT GAS ANDA
 
         const state = {
             user: null, // {nip, nama, jabatan, role}
@@ -398,21 +406,36 @@
             },
 
             cetakPDF() {
-                // Tampilkan kop surat saat print mode JS/html2pdf
+                // Tampilkan kop surat dan info saat rendering PDF
                 document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = 'block');
                 
-                // Setel subjudul laporan
                 let bulan = document.getElementById('filter-bulan').value || 'Semua Waktu';
                 document.getElementById('print-subtitle').innerText = 'Bulan: ' + bulan;
 
-                // Gunakan standard print window yang bersih, 
-                // karena browser print default menghasilkan A4 yang sangat rapi dan searchable.
-                window.print();
+                // Isi data pegawai untuk print
+                document.getElementById('print-nama').innerText = state.user.nama;
+                document.getElementById('print-jabatan').innerText = state.user.jabatan || 'Pegawai / Admin';
                 
-                // Kembalikan display none setelah print (menggunakan event afterprint atau delay)
-                setTimeout(() => {
+                // Gunakan html2pdf untuk unduh otomatis
+                const element = document.getElementById('print-area');
+                
+                // Hapus shadow dan overflow yang bisa memotong tabel saat di-PDF-kan
+                element.classList.remove('shadow', 'overflow-x-auto');
+
+                const opt = {
+                    margin:       0.3,
+                    filename:     `Laporan_Kinerja_${state.user.nama.replace(/\s+/g, '_')}_${bulan}.pdf`,
+                    image:        { type: 'jpeg', quality: 1 },
+                    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, 
+                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } // A4 Landscape agar tabel muat
+                };
+
+                // Proses download
+                html2pdf().set(opt).from(element).save().then(() => {
+                    // Kembalikan ke tampilan layar setelah selesai
                     document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = '');
-                }, 1000);
+                    element.classList.add('shadow', 'overflow-x-auto');
+                });
             }
         };
 
@@ -666,23 +689,67 @@
                         return;
                     }
 
-                    tbody.innerHTML = res.data.map((k, idx) => {
-                        const statusClass = k.status === 'Tercapai' ? 'text-green-600 font-bold' : 'text-red-600 font-bold';
-                        const jamStr = Math.floor(k.menit/60) + ' J ' + (k.menit%60) + ' M';
-                        
-                        return `
-                        <tr class="border-b">
-                            <td class="p-2 border-r border-gray-300 text-center">${idx + 1}</td>
-                            ${state.user.role === 'admin' ? `<td class="p-2 border-r border-gray-300 text-sm font-medium">${k.nama}</td>` : ''}
-                            <td class="p-2 border-r border-gray-300 text-sm whitespace-nowrap">${k.tanggal}</td>
-                            <td class="p-2 border-r border-gray-300 text-sm">${k.rencana}</td>
-                            <td class="p-2 border-r border-gray-300 text-sm text-center">${k.jamMulai} - ${k.jamSelesai}</td>
-                            <td class="p-2 border-r border-gray-300 text-sm truncate max-w-xs" title="${k.uraian}">${k.uraian}</td>
-                            <td class="p-2 border-r border-gray-300 text-sm text-center">${jamStr}</td>
-                            <td class="p-2 text-sm text-center ${statusClass}">${k.status}</td>
-                        </tr>
-                        `;
-                    }).join('');
+                    // PENGELOMPOKKAN DATA BERDASARKAN TANGGAL & NIP UNTUK AKUMULASI JAM HARIAN
+                    const grouped = {};
+                    res.data.forEach(k => {
+                        const key = `${k.tanggal}_${k.nip}`;
+                        if (!grouped[key]) {
+                            grouped[key] = { nip: k.nip, nama: k.nama, tanggal: k.tanggal, items: [], totalMenit: 0 };
+                        }
+                        grouped[key].items.push(k);
+                        grouped[key].totalMenit += (parseInt(k.menit) || 0);
+                    });
+
+                    let html = '';
+                    let no = 1;
+
+                    // Render Tabel
+                    for (const key in grouped) {
+                        const group = grouped[key];
+                        // Cek status akumulasi harian (7,5 jam = 450 menit)
+                        const isTercapai = group.totalMenit >= 450;
+                        const statusClass = isTercapai ? 'text-green-600' : 'text-red-600';
+                        const statusText = isTercapai ? 'Tercapai' : 'Belum Tercapai';
+                        const totalJamHarianStr = Math.floor(group.totalMenit / 60) + ' J ' + (group.totalMenit % 60) + ' M';
+
+                        group.items.forEach((k, index) => {
+                            const jamKegiatanStr = Math.floor(k.menit / 60) + ' J ' + (k.menit % 60) + ' M';
+                            
+                            // PENCEGAHAN ERROR WAKTU: Format paksa jika masih mengandung "1899"
+                            let displayMulai = k.jamMulai;
+                            let displaySelesai = k.jamSelesai;
+                            if (displayMulai && displayMulai.includes("1899")) {
+                                displayMulai = new Date(displayMulai).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                            }
+                            if (displaySelesai && displaySelesai.includes("1899")) {
+                                displaySelesai = new Date(displaySelesai).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                            }
+                            
+                            html += `
+                            <tr class="border-b">
+                                ${index === 0 ? `<td class="p-2 border-r border-gray-300 text-center align-top" rowspan="${group.items.length}">${no++}</td>` : ''}
+                                
+                                ${state.user.role === 'admin' 
+                                    ? (index === 0 ? `<td class="p-2 border-r border-gray-300 text-sm font-medium align-top" rowspan="${group.items.length}">${k.nama}</td>` : '') 
+                                    : ''}
+                                
+                                ${index === 0 ? `<td class="p-2 border-r border-gray-300 text-sm whitespace-nowrap align-top" rowspan="${group.items.length}">${k.tanggal}</td>` : ''}
+                                
+                                <td class="p-2 border-r border-gray-300 text-sm">${k.rencana}</td>
+                                <td class="p-2 border-r border-gray-300 text-sm text-center">${displayMulai} - ${displaySelesai}</td>
+                                <td class="p-2 border-r border-gray-300 text-sm truncate max-w-xs" title="${k.uraian}">${k.uraian}</td>
+                                <td class="p-2 border-r border-gray-300 text-sm text-center">${jamKegiatanStr}</td>
+                                
+                                ${index === 0 ? `<td class="p-2 text-sm text-center align-middle border-l border-gray-300 bg-gray-50" rowspan="${group.items.length}">
+                                    <div class="font-bold text-gray-800 text-base mb-1">${totalJamHarianStr}</div>
+                                    <div class="font-bold ${statusClass}">${statusText}</div>
+                                </td>` : ''}
+                            </tr>
+                            `;
+                        });
+                    }
+
+                    tbody.innerHTML = html;
 
                 } catch(e) {
                     tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">Gagal memuat data</td></tr>`;
