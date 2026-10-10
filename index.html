@@ -6,6 +6,7 @@
     <title>Sistem Pencatatan Kinerja Harian - KPU Mamasa</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- html2pdf js untuk generate PDF Otomatis -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
@@ -13,427 +14,333 @@
         .spinner { border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; width: 20px; height: 20px; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        @media print {
-            body { background: white; margin: 0; padding: 0; }
-            #sidebar, #topbar, .no-print, button { display: none !important; }
-            #main-content { margin-left: 0 !important; width: 100% !important; }
-            .print-area { display: block !important; padding: 20px; color: black; }
-        }
-        
-        .kop-surat { text-align: center; border-bottom: 3px solid black; padding-bottom: 15px; margin-bottom: 25px; position: relative; }
+        /* Pengaturan Layout KOP Surat untuk Cetak PDF */
+        .kop-surat { border-bottom: 3px solid black; padding-bottom: 12px; margin-bottom: 25px; position: relative; display: flex; align-items: center; justify-content: center; color: black;}
         .kop-surat::after { content: ''; position: absolute; bottom: -6px; left: 0; right: 0; border-bottom: 1px solid black; }
-        .kop-logo { position: absolute; left: 10px; top: 0; width: 90px; }
-        .kop-text-1 { font-size: 16px; font-weight: bold; margin: 0; letter-spacing: 1px; }
-        .kop-text-2 { font-size: 22px; font-weight: bold; margin: 5px 0; letter-spacing: 2px; }
-        .kop-text-3 { font-size: 12px; margin: 0; font-style: italic; }
+        .kop-logo { width: 90px; position: absolute; left: 10px; }
+        .kop-text-container { flex: 1; text-align: center; padding: 0 110px; }
+        .kop-text-1 { font-size: 20px; font-weight: bold; margin: 0; letter-spacing: 1px; color: black; }
+        .kop-text-2 { font-size: 28px; font-weight: bold; margin: 5px 0; letter-spacing: 2px; color: black; }
+        .kop-text-3 { font-size: 14px; margin: 0; font-style: normal; color: black; }
+        
+        table.laporan-tb { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
+        table.laporan-tb th, table.laporan-tb td { border: 1px solid #4a5568; padding: 10px; vertical-align: middle; }
+        table.laporan-tb th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
+        
+        /* Class khusus untuk elemen yang hanya muncul saat di-print ke PDF */
+        .show-on-print { display: none; }
     </style>
 </head>
 <body class="text-gray-800 antialiased overflow-x-hidden">
 
-    <!-- Notifikasi Toast -->
     <div id="toast" class="fixed top-5 right-5 z-50 transform transition-transform duration-300 translate-x-full bg-green-500 text-white px-6 py-3 rounded shadow-lg flex items-center gap-3">
-        <i id="toast-icon" class="fas fa-check-circle"></i>
-        <span id="toast-msg">Pesan sukses</span>
+        <i id="toast-icon" class="fas fa-check-circle"></i><span id="toast-msg">Sukses</span>
     </div>
 
+    <!-- Tampilan Login -->
     <div id="view-login" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-500 to-red-600">
         <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-center">
             <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/KPU_Logo.svg" alt="KPU Logo" class="h-24 mx-auto mb-4">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">E-Kinerja Harian</h2>
             <p class="text-sm text-gray-500 mb-8">KPU Kabupaten Mamasa</p>
-            
             <form id="login-form" class="space-y-6">
                 <div>
-                    <label class="block text-left text-sm font-medium text-gray-700 mb-1">Nomor Induk Pegawai (NIP)</label>
-                    <input type="text" id="login-nip" required class="w-full px-4 py-3 rounded border focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Masukkan NIP anda">
+                    <label class="block text-left text-sm font-medium text-gray-700 mb-1">NIP Pegawai</label>
+                    <input type="text" id="login-nip" required class="w-full px-4 py-3 rounded border focus:ring-2 focus:ring-orange-500" placeholder="Masukkan NIP anda">
                 </div>
-                <button type="submit" id="btn-login" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded transition duration-200 flex justify-center items-center">
-                    <span id="login-text">Masuk / Login</span>
-                    <div id="login-spin" class="spinner hidden ml-2"></div>
+                <button type="submit" id="btn-login" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded flex justify-center items-center">
+                    <span id="login-text">Masuk Sistem</span><div id="login-spin" class="spinner hidden ml-2"></div>
                 </button>
             </form>
-            <p class="mt-4 text-xs text-gray-400">Admin default NIP: admin</p>
         </div>
     </div>
 
+    <!-- Tampilan Aplikasi -->
     <div id="view-app" class="hidden min-h-screen flex bg-gray-100">
-        
         <!-- Sidebar -->
         <div id="sidebar" class="w-64 bg-gray-900 text-white flex-shrink-0 fixed h-full z-10 transition-transform transform -translate-x-full md:translate-x-0">
             <div class="p-6 flex items-center gap-3 border-b border-gray-700">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/KPU_Logo.svg" class="h-8">
-                <span class="font-bold text-lg tracking-wider">E-Kinerja</span>
+                <span class="font-bold text-lg">E-Kinerja</span>
             </div>
-            <nav class="p-4 space-y-2 mt-4" id="nav-menu">
-                <!-- Menu Dinamis di-render via JS -->
-            </nav>
+            <nav class="p-4 space-y-2 mt-4" id="nav-menu"></nav>
         </div>
 
-        <!-- Konten Utama -->
         <div id="main-content" class="flex-1 w-full md:ml-64 transition-all">
-            
             <!-- Topbar -->
             <div id="topbar" class="bg-white shadow h-16 flex items-center justify-between px-6 z-0">
-                <button id="btn-menu" class="md:hidden text-gray-600 hover:text-gray-900 focus:outline-none">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
+                <button id="btn-menu" class="md:hidden text-gray-600 hover:text-gray-900"><i class="fas fa-bars text-xl"></i></button>
                 <div class="flex items-center gap-4 ml-auto">
                     <div class="text-right hidden sm:block">
                         <p id="user-name" class="text-sm font-bold text-gray-800">Nama</p>
                         <p id="user-role" class="text-xs text-gray-500 capitalize">Role</p>
                     </div>
-                    <div class="h-10 w-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <button onclick="app.logout()" class="ml-4 text-red-500 hover:text-red-700 tooltip" title="Keluar">
-                        <i class="fas fa-sign-out-alt text-lg"></i>
-                    </button>
+                    <button onclick="app.logout()" class="ml-4 text-red-500 hover:text-red-700" title="Keluar"><i class="fas fa-sign-out-alt text-lg"></i></button>
                 </div>
             </div>
 
-            <!-- Area Tampilan Berbagai Halaman -->
+            <!-- Area Halaman -->
             <div class="p-6 w-full max-w-6xl mx-auto" id="pages-container">
                 
-                <!-- Halaman: Dashboard -->
+                <!-- Halaman Dashboard -->
                 <div id="page-dashboard" class="page-view hidden">
                     <h2 class="text-2xl font-bold mb-6 text-gray-800">Dashboard Statistik Bulan Ini</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
-                            <p class="text-sm text-gray-500 mb-1">Total Kegiatan</p>
-                            <h3 class="text-3xl font-bold text-gray-800" id="stat-total">0</h3>
+                        <div class="bg-white p-6 rounded shadow border-l-4 border-blue-500">
+                            <p class="text-sm text-gray-500">Total Kegiatan Diinput</p><h3 class="text-3xl font-bold text-gray-800" id="stat-total">0</h3>
                         </div>
-                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
-                            <p class="text-sm text-gray-500 mb-1">Target Tercapai (≥ 7.5 Jam)</p>
-                            <h3 class="text-3xl font-bold text-green-600" id="stat-tercapai">0</h3>
+                        <div class="bg-white p-6 rounded shadow border-l-4 border-green-500">
+                            <p class="text-sm text-gray-500">Hari Target Tercapai (≥ 7.5 Jam)</p><h3 class="text-3xl font-bold text-green-600" id="stat-tercapai">0</h3>
                         </div>
-                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-red-500">
-                            <p class="text-sm text-gray-500 mb-1">Target Belum Tercapai</p>
-                            <h3 class="text-3xl font-bold text-red-600" id="stat-belum">0</h3>
+                        <div class="bg-white p-6 rounded shadow border-l-4 border-red-500">
+                            <p class="text-sm text-gray-500">Hari Belum Tercapai</p><h3 class="text-3xl font-bold text-red-600" id="stat-belum">0</h3>
                         </div>
-                    </div>
-                </div>
-
-                <div id="page-pegawai" class="page-view hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Kelola Pegawai</h2>
-                        <button onclick="ui.showModal('modal-pegawai')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
-                            <i class="fas fa-plus mr-2"></i> Tambah Pegawai
-                        </button>
-                    </div>
-                    <div class="bg-white rounded-lg shadow overflow-hidden overflow-x-auto">
-                        <table class="w-full whitespace-nowrap">
-                            <thead class="bg-gray-50 border-b">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">NIP</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama Pegawai</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jabatan</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="table-pegawai" class="divide-y divide-gray-200">
-                                <!-- Render dinamis -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div id="page-rencana" class="page-view hidden">
-                    <h2 class="text-2xl font-bold mb-6 text-gray-800">Rencana Aksi Saya</h2>
-                    <div class="bg-white p-6 rounded-lg shadow mb-6">
-                        <form id="form-rencana" class="flex gap-4">
-                            <input type="text" id="input-rencana" required class="flex-1 px-4 py-2 border rounded focus:ring-orange-500 focus:outline-none" placeholder="Misal: Penyusunan Laporan Keuangan Bulan X">
-                            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded shadow"><i class="fas fa-save mr-2"></i> Simpan</button>
-                        </form>
-                    </div>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <ul id="list-rencana" class="divide-y divide-gray-200">
-                            <!-- Render Dinamis -->
-                        </ul>
                     </div>
                 </div>
 
                 <div id="page-input" class="page-view hidden">
                     <h2 class="text-2xl font-bold mb-6 text-gray-800">Catat Kinerja Harian</h2>
-                    <div class="bg-white p-6 rounded-lg shadow max-w-3xl">
+                    <div class="bg-white p-6 rounded shadow max-w-3xl">
                         <form id="form-kinerja" class="space-y-4">
-                            
                             <div>
                                 <label class="block text-sm font-medium mb-1">1. Rencana Aksi</label>
-                                <select id="kin-rencana" required class="w-full p-2 border rounded bg-gray-50">
-                                    <option value="">-- Pilih Rencana Aksi --</option>
-                                    <!-- Render dinamis dari rencana aksi -->
-                                </select>
+                                <select id="kin-rencana" required class="w-full p-2 border rounded bg-gray-50"></select>
                             </div>
-                            
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium mb-1">2. Tanggal Kegiatan</label>
-                                    <input type="date" id="kin-tanggal" required class="w-full p-2 border rounded">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium mb-1">3. Jam Mulai</label>
-                                    <input type="time" id="kin-mulai" required class="w-full p-2 border rounded">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium mb-1">4. Jam Selesai</label>
-                                    <input type="time" id="kin-selesai" required class="w-full p-2 border rounded">
-                                </div>
+                                <div><label class="block text-sm font-medium mb-1">2. Tanggal</label><input type="date" id="kin-tanggal" required class="w-full p-2 border rounded"></div>
+                                <div><label class="block text-sm font-medium mb-1">3. Jam Mulai</label><input type="time" id="kin-mulai" required class="w-full p-2 border rounded"></div>
+                                <div><label class="block text-sm font-medium mb-1">4. Jam Selesai</label><input type="time" id="kin-selesai" required class="w-full p-2 border rounded"></div>
                             </div>
                             
-                            <!-- Kalkulator Jam Otomatis (UI Only) -->
-                            <div class="p-3 bg-blue-50 rounded border border-blue-200 text-sm">
-                                <strong>Jumlah Jam Kinerja: </strong> <span id="kin-durasi">0 Menit</span> 
-                                <span id="kin-badge" class="ml-2 px-2 py-1 rounded text-xs font-bold bg-gray-300 text-gray-700">Belum dihitung</span>
-                                <p class="text-xs text-gray-500 mt-1">*Target minimal 7 Jam 30 Menit (450 Menit).</p>
+                            <!-- Kalkulator UI -->
+                            <div class="p-4 bg-blue-50 rounded border border-blue-200 text-sm">
+                                <div class="mb-1 text-gray-600">Total jam kinerja Anda sebelumnya (di tanggal yang sama): <span id="kin-akumulasi-sebelumnya" class="font-bold">0 Menit</span></div>
+                                <div class="text-base text-gray-800 mt-1">
+                                    <strong>Total Akumulasi Hari Ini (Setelah ditambah): </strong> <span id="kin-durasi">0 Menit</span> 
+                                    <span id="kin-badge" class="ml-2 px-2 py-1 rounded text-xs font-bold bg-gray-300 text-gray-700">Belum dihitung</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">*Target minimal 7 Jam 30 Menit (450 Menit) per hari.</p>
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-medium mb-1">5. Uraian Kegiatan</label>
-                                <textarea id="kin-uraian" required rows="3" class="w-full p-2 border rounded"></textarea>
-                            </div>
-
+                            <div><label class="block text-sm font-medium mb-1">5. Uraian Kegiatan</label><textarea id="kin-uraian" required rows="3" class="w-full p-2 border rounded"></textarea></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium mb-1">6. Realisasi Output (misal: 1 Dokumen)</label>
-                                    <input type="text" id="kin-realisasi" required class="w-full p-2 border rounded">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium mb-1">7. Bukti Dukung (Link Google Drive/Dll)</label>
-                                    <input type="url" id="kin-bukti" class="w-full p-2 border rounded" placeholder="https://...">
-                                </div>
+                                <div><label class="block text-sm font-medium mb-1">6. Realisasi Output</label><input type="text" id="kin-realisasi" required class="w-full p-2 border rounded"></div>
+                                <div><label class="block text-sm font-medium mb-1">7. Bukti Dukung (Link)</label><input type="url" id="kin-bukti" class="w-full p-2 border rounded"></div>
                             </div>
-
-                            <div class="pt-4 border-t">
-                                <button type="submit" id="btn-submit-kinerja" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded shadow-lg flex justify-center items-center">
-                                    <span>Simpan Kinerja</span>
-                                </button>
-                            </div>
+                            <div class="pt-4 border-t"><button type="submit" id="btn-submit-kinerja" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded">Simpan Kinerja</button></div>
                         </form>
                     </div>
                 </div>
 
                 <div id="page-rekap" class="page-view hidden">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                        <h2 class="text-2xl font-bold text-gray-800" id="title-rekap">Rekapitulasi Kinerja</h2>
-                        
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 class="text-2xl font-bold text-gray-800">Rekapitulasi Kinerja</h2>
                         <div class="flex gap-2 w-full md:w-auto">
-                            <!-- Filter untuk Admin -->
-                            <select id="filter-pegawai" class="hidden p-2 border rounded shadow-sm flex-1 md:w-auto">
-                                <option value="all">Semua Pegawai</option>
-                            </select>
-                            
-                            <input type="month" id="filter-bulan" class="p-2 border rounded shadow-sm">
-                            <button onclick="app.loadKinerja()" class="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900 shadow">Tampilkan</button>
-                            <button onclick="ui.cetakPDF()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 shadow flex items-center">
-                                <i class="fas fa-file-pdf mr-2"></i> Cetak PDF
-                            </button>
+                            <select id="filter-pegawai" class="hidden p-2 border rounded flex-1 md:flex-none"></select>
+                            <input type="month" id="filter-bulan" class="p-2 border rounded flex-1 md:flex-none">
+                            <button onclick="app.loadKinerja()" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded">Lihat</button>
+                            <button onclick="ui.cetakPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow flex items-center whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i> Cetak PDF</button>
                         </div>
                     </div>
 
-                    <!-- Area yang akan di Print -->
-                    <div id="print-area" class="bg-white p-2 md:p-8 rounded shadow overflow-x-auto print-area">
-                        <!-- KOP SURAT (Hanya tampil di print) -->
-                        <div class="kop-surat hidden no-screen-kop">
-                            <!-- Logo KPU -->
+                    <!-- Area Khusus Print PDF -->
+                    <div id="print-area" class="bg-white p-4 md:p-8 rounded shadow overflow-x-auto">
+                        
+                        <!-- Header / Kop Surat (Tersembunyi di web, Muncul di PDF) -->
+                        <div class="kop-surat show-on-print">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/KPU_Logo.svg" class="kop-logo" alt="Logo KPU">
-                            <p class="kop-text-1">KOMISI PEMILIHAN UMUM</p>
-                            <p class="kop-text-2">KABUPATEN MAMASA</p>
-                            <p class="kop-text-3">Jl. Poros Mamasa - Polewali, Kabupaten Mamasa, Sulawesi Barat</p>
+                            <div class="kop-text-container">
+                                <p class="kop-text-1">KOMISI PEMILIHAN UMUM</p>
+                                <p class="kop-text-2">KABUPATEN MAMASA</p>
+                                <p class="kop-text-3">Jl. Poros Mamasa - Polewali, Kabupaten Mamasa, Sulawesi Barat</p>
+                            </div>
                         </div>
 
-                        <div class="mb-4 text-center hidden no-screen-kop">
-                            <h3 class="font-bold text-lg underline uppercase">Laporan Kinerja Harian Pegawai</h3>
-                            <p class="text-sm" id="print-subtitle">Bulan: -</p>
+                        <div class="mb-6 text-center show-on-print">
+                            <h3 style="font-size: 16px; font-weight: bold; text-decoration: underline; color: black; margin-bottom: 5px;">LAPORAN KINERJA HARIAN PEGAWAI</h3>
+                            <p style="font-size: 14px; color: black;" id="print-subtitle">Bulan: -</p>
                         </div>
 
-                        <!-- Data Pegawai untuk PDF -->
-                        <div id="print-pegawai-info" class="mb-4 text-sm hidden no-screen-kop">
-                            <table>
-                                <tr><td class="font-bold pr-4">Nama</td><td>: <span id="print-nama"></span></td></tr>
-                                <tr><td class="font-bold pr-4">Jabatan</td><td>: <span id="print-jabatan"></span></td></tr>
+                        <!-- Info Pegawai di PDF -->
+                        <div class="mb-4 text-sm show-on-print" style="color: black;">
+                            <table style="width: 100%; max-width: 450px; text-align: left;">
+                                <tr><td style="font-weight: bold; width: 30%; padding-bottom:4px;">Nama Pegawai</td><td>: <span id="print-nama"></span></td></tr>
+                                <tr><td style="font-weight: bold; padding-bottom:4px;">NIP</td><td>: <span id="print-nip"></span></td></tr>
+                                <tr><td style="font-weight: bold; padding-bottom:4px;">Jabatan</td><td>: <span id="print-jabatan"></span></td></tr>
                             </table>
+                            <br>
                         </div>
 
-                        <table class="w-full text-sm border-collapse border border-gray-400">
-                            <thead class="bg-gray-100">
+                        <!-- Tabel Utama -->
+                        <table class="laporan-tb text-sm w-full">
+                            <thead>
                                 <tr>
-                                    <th class="border border-gray-400 p-2">No</th>
-                                    <th class="border border-gray-400 p-2 admin-only-col">Nama Pegawai</th>
-                                    <th class="border border-gray-400 p-2">Tanggal</th>
-                                    <th class="border border-gray-400 p-2">Rencana Aksi</th>
-                                    <th class="border border-gray-400 p-2">Waktu</th>
-                                    <th class="border border-gray-400 p-2">Uraian</th>
-                                    <th class="border border-gray-400 p-2">Durasi Kegiatan</th>
-                                    <th class="border border-gray-400 p-2">Total Jam Harian & Status</th>
+                                    <th style="width: 4%;">No</th>
+                                    <th class="admin-only-col" style="width: 12%;">Nama Pegawai</th>
+                                    <th style="width: 9%;">Tanggal</th>
+                                    <th style="width: 12%;">Rencana Aksi</th>
+                                    <th style="width: 12%;">Waktu (Mulai - Selesai)</th>
+                                    <th style="width: 25%;">Uraian Kegiatan</th>
+                                    <th style="width: 9%;">Total Jam<br>(Kegiatan)</th>
+                                    <th style="width: 10%;">Akumulasi Jam<br>(Harian)</th>
+                                    <th class="aksi-col no-print" style="width: 7%;">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="table-rekap">
-                                <!-- Data Rekap -->
-                            </tbody>
+                            <tbody id="table-rekap"></tbody>
                         </table>
                     </div>
                 </div>
 
-            </div> <!-- End Pages Container -->
+                <div id="page-pegawai" class="page-view hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">Kelola Akun Pegawai</h2>
+                        <button onclick="ui.showModal('modal-pegawai')" class="bg-blue-600 text-white px-4 py-2 rounded shadow"><i class="fas fa-plus mr-2"></i> Tambah Pegawai</button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="w-full text-sm text-left"><thead class="bg-gray-200"><tr><th class="p-3">NIP</th><th class="p-3">Nama Lengkap</th><th class="p-3">Jabatan</th><th class="p-3">Aksi</th></tr></thead><tbody id="table-pegawai" class="divide-y"></tbody></table>
+                    </div>
+                </div>
+
+                <div id="page-rencana" class="page-view hidden">
+                    <h2 class="text-2xl font-bold mb-6">Rencana Aksi Anda</h2>
+                    <form id="form-rencana" class="flex gap-4 mb-6">
+                        <input type="text" id="input-rencana" placeholder="Input rencana aksi baru..." class="flex-1 p-3 border rounded shadow-sm" required>
+                        <button class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded shadow font-bold">Simpan</button>
+                    </form>
+                    <ul id="list-rencana" class="bg-white p-4 rounded shadow space-y-2"></ul>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div id="modal-pegawai" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md shadow-xl transform transition-all">
-            <h3 class="text-xl font-bold mb-4">Data Pegawai</h3>
-            <form id="form-pegawai" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">NIP</label>
-                    <input type="text" id="peg-nip" required class="w-full p-2 border rounded" placeholder="Nomor Induk Pegawai">
+    <!-- Modal Edit Kinerja -->
+    <div id="modal-edit-kinerja" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4">Edit Kinerja Harian</h3>
+            <form id="form-edit-kinerja" class="space-y-4">
+                <input type="hidden" id="edit-kin-id">
+                <div><label class="block text-sm mb-1">Rencana Aksi</label><input type="text" id="edit-kin-rencana" class="w-full p-2 border rounded bg-gray-50" readonly></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><label class="block text-sm mb-1">Tanggal</label><input type="date" id="edit-kin-tanggal" required class="w-full p-2 border rounded"></div>
+                    <div><label class="block text-sm mb-1">Jam Mulai</label><input type="time" id="edit-kin-mulai" required class="w-full p-2 border rounded"></div>
+                    <div><label class="block text-sm mb-1">Jam Selesai</label><input type="time" id="edit-kin-selesai" required class="w-full p-2 border rounded"></div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Nama Lengkap</label>
-                    <input type="text" id="peg-nama" required class="w-full p-2 border rounded">
+                <div><label class="block text-sm mb-1">Uraian Kegiatan</label><textarea id="edit-kin-uraian" required rows="3" class="w-full p-2 border rounded"></textarea></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-sm mb-1">Realisasi Output</label><input type="text" id="edit-kin-realisasi" required class="w-full p-2 border rounded"></div>
+                    <div><label class="block text-sm mb-1">Bukti Dukung (Link)</label><input type="url" id="edit-kin-bukti" class="w-full p-2 border rounded"></div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Jabatan</label>
-                    <input type="text" id="peg-jabatan" required class="w-full p-2 border rounded">
-                </div>
-                <div class="flex justify-end gap-2 pt-4 border-t">
-                    <button type="button" onclick="ui.hideModal('modal-pegawai')" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded shadow">Simpan</button>
+                <div class="flex justify-end gap-2 mt-4 pt-4 border-t">
+                    <button type="button" onclick="ui.hideModal('modal-edit-kinerja')" class="px-4 py-2 bg-gray-200 rounded">Batal</button>
+                    <button type="submit" id="btn-save-edit" class="px-4 py-2 bg-blue-600 text-white rounded font-bold">Update Data</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Modal Pegawai -->
+    <div id="modal-pegawai" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 class="font-bold mb-4 text-xl">Data Pegawai</h3>
+            <form id="form-pegawai" class="space-y-4">
+                <input type="text" id="peg-nip" placeholder="NIP (Tanpa Spasi)" class="w-full p-2 border rounded" required>
+                <input type="text" id="peg-nama" placeholder="Nama Lengkap" class="w-full p-2 border rounded" required>
+                <input type="text" id="peg-jabatan" placeholder="Jabatan" class="w-full p-2 border rounded" required>
+                <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="ui.hideModal('modal-pegawai')" class="px-4 py-2 bg-gray-200 rounded">Batal</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded font-bold">Simpan</button></div>
+            </form>
+        </div>
+    </div>
 
     <script>
-        // MASUKKAN URL GOOGLE APPS SCRIPT WEB APP ANDA DI SINI
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyhbLLbYhB8MKOQ0_ZBJWY3w83f-iq90ZkqjHp300apO9v68nV71l7SXJKu2nQTog0/exec"; // <-- GANTI DENGAN URL DEPLOYMENT GAS ANDA
+        // =========================================================================
+        // PENTING: GANTI URL DI BAWAH INI DENGAN URL WEB APP GAS YANG BARU DIDEPLOY
+        // =========================================================================
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbz6rgrzMxKGXG8h0iiO8sVY2AyaETt4gLb9u8UiJcG8oDafZQXpqFnL2hZdE5DPiik/exec";
 
-        const state = {
-            user: null, // {nip, nama, jabatan, role}
-            rencanaAksiList: [],
-            pegawaiList: []
-        };
+        const state = { user: null, kinerjaBulanIni: [], rawKinerjaData: [] };
 
         const api = {
             async request(action, payload = {}) {
                 try {
-                    // Pakai method POST text/plain untuk bypass CORS preflight rumit di browser ke GAS
-                    const response = await fetch(GAS_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
-                        body: JSON.stringify({ action: action, payload: payload })
-                    });
+                    const response = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action, payload }) });
                     const result = await response.json();
                     if(result.status === 'error') throw new Error(result.message);
                     return result;
-                } catch (error) {
-                    ui.toast(error.message, 'error');
-                    throw error;
-                }
+                } catch (error) { ui.toast(error.message, 'error'); throw error; }
             }
         };
 
         const ui = {
             toast(msg, type = 'success') {
                 const el = document.getElementById('toast');
-                const icon = document.getElementById('toast-icon');
                 document.getElementById('toast-msg').textContent = msg;
-                
-                el.classList.remove('bg-green-500', 'bg-red-500', 'translate-x-full');
-                icon.className = '';
-                
-                if (type === 'success') {
-                    el.classList.add('bg-green-500');
-                    icon.classList.add('fas', 'fa-check-circle');
-                } else {
-                    el.classList.add('bg-red-500');
-                    icon.classList.add('fas', 'fa-exclamation-circle');
-                }
-
+                el.className = `fixed top-5 right-5 z-50 transform transition-transform duration-300 px-6 py-3 rounded shadow-lg flex items-center gap-3 text-white ${type === 'success' ? 'bg-green-500' : 'bg-red-600'}`;
                 setTimeout(() => el.classList.add('translate-x-full'), 3000);
             },
-            show(id) { document.getElementById(id).classList.remove('hidden'); },
+            show(id) { document.getElementById(id).classList.remove('hidden'); }, 
             hide(id) { document.getElementById(id).classList.add('hidden'); },
-            showModal(id) { this.show(id); },
+            showModal(id) { this.show(id); }, 
             hideModal(id) { this.hide(id); },
-            
             navigate(pageId) {
-                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
-                this.show(pageId);
+                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden')); this.show(pageId);
+                if (window.innerWidth < 768) document.getElementById('sidebar').classList.add('-translate-x-full');
                 
-                // Tutup sidebar di mobile setelah klik
-                if (window.innerWidth < 768) {
-                    document.getElementById('sidebar').classList.add('-translate-x-full');
-                }
-                
-                // Jalankan fungsi fetch sesuai halaman
                 if (pageId === 'page-dashboard') app.loadDashboard();
-                if (pageId === 'page-pegawai' && state.user.role === 'admin') app.loadPegawai();
-                if (pageId === 'page-rencana') app.loadRencanaAksi();
                 if (pageId === 'page-input') app.prepareFormKinerja();
                 if (pageId === 'page-rekap') app.loadKinerja();
+                if (pageId === 'page-rencana') app.loadRencanaAksi();
+                if (pageId === 'page-pegawai') app.loadPegawai();
             },
-
             setupMenu() {
-                const menu = document.getElementById('nav-menu');
-                menu.innerHTML = ''; // bersihkan menu
+                const menu = document.getElementById('nav-menu'); menu.innerHTML = '';
+                const addMenu = (id, icon, label) => menu.innerHTML += `<a href="#" onclick="ui.navigate('${id}')" class="flex items-center gap-3 px-4 py-3 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition"><i class="fas ${icon} w-5"></i><span>${label}</span></a>`;
                 
-                const addMenu = (id, icon, label) => {
-                    menu.innerHTML += `
-                        <a href="#" onclick="ui.navigate('${id}')" class="flex items-center gap-3 px-4 py-3 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
-                            <i class="fas ${icon} w-5"></i>
-                            <span>${label}</span>
-                        </a>
-                    `;
-                };
-
                 addMenu('page-dashboard', 'fa-chart-pie', 'Dashboard');
-                
-                if (state.user.role === 'admin') {
-                    addMenu('page-pegawai', 'fa-users', 'Kelola Pegawai');
-                    addMenu('page-rekap', 'fa-folder-open', 'Semua Rekap Kinerja');
-                    
-                    // Admin UI adjustments
-                    this.show('filter-pegawai');
-                    document.querySelectorAll('.admin-only-col').forEach(el => el.classList.remove('hidden'));
-                } else {
-                    addMenu('page-rencana', 'fa-tasks', 'Rencana Aksi');
-                    addMenu('page-input', 'fa-edit', 'Input Kinerja');
-                    addMenu('page-rekap', 'fa-file-alt', 'Rekap Saya');
-                    
-                    this.hide('filter-pegawai');
-                    document.querySelectorAll('.admin-only-col').forEach(el => el.classList.add('hidden'));
+                if (state.user.role === 'admin') { 
+                    addMenu('page-pegawai', 'fa-users', 'Kelola Akun Pegawai'); 
+                    addMenu('page-rekap', 'fa-folder-open', 'Semua Laporan Kinerja'); 
+                    this.show('filter-pegawai'); 
+                    document.querySelectorAll('.admin-only-col').forEach(el => el.classList.remove('hidden')); 
+                } else { 
+                    addMenu('page-rencana', 'fa-tasks', '1. Buat Rencana Aksi'); 
+                    addMenu('page-input', 'fa-edit', '2. Input Kinerja Harian'); 
+                    addMenu('page-rekap', 'fa-file-alt', '3. Rekap & Cetak PDF'); 
+                    this.hide('filter-pegawai'); 
+                    document.querySelectorAll('.admin-only-col').forEach(el => el.classList.add('hidden')); 
                 }
             },
-
+            
+            // Logika Cetak PDF Profesional
             cetakPDF() {
-                // Tampilkan kop surat dan info saat rendering PDF
-                document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = 'block');
+                // 1. Tampilkan Kop Surat & Detail Pegawai
+                document.querySelectorAll('.show-on-print').forEach(el => el.style.display = 'block');
                 
+                // 2. Sembunyikan kolom "Aksi" (Edit/Hapus)
+                document.querySelectorAll('.aksi-col').forEach(el => el.style.display = 'none');
+                
+                // 3. Isi Data Pegawai
                 let bulan = document.getElementById('filter-bulan').value || 'Semua Waktu';
                 document.getElementById('print-subtitle').innerText = 'Bulan: ' + bulan;
-
-                // Isi data pegawai untuk print
                 document.getElementById('print-nama').innerText = state.user.nama;
-                document.getElementById('print-jabatan').innerText = state.user.jabatan || 'Pegawai / Admin';
+                document.getElementById('print-nip').innerText = state.user.nip;
+                document.getElementById('print-jabatan').innerText = state.user.jabatan || 'Pegawai / Administrator';
                 
-                // Gunakan html2pdf untuk unduh otomatis
                 const element = document.getElementById('print-area');
-                
-                // Hapus shadow dan overflow yang bisa memotong tabel saat di-PDF-kan
                 element.classList.remove('shadow', 'overflow-x-auto');
 
                 const opt = {
                     margin:       0.3,
                     filename:     `Laporan_Kinerja_${state.user.nama.replace(/\s+/g, '_')}_${bulan}.pdf`,
-                    image:        { type: 'jpeg', quality: 1 },
+                    image:        { type: 'jpeg', quality: 0.98 },
                     html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, 
-                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } // A4 Landscape agar tabel muat
+                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } // Mode Landscape untuk tabel besar
                 };
 
-                // Proses download
+                // Jalankan Proses HTML2PDF
                 html2pdf().set(opt).from(element).save().then(() => {
-                    // Kembalikan ke tampilan layar setelah selesai
-                    document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = '');
+                    // 4. Kembalikan tampilan UI seperti semula setelah didownload
+                    document.querySelectorAll('.show-on-print').forEach(el => el.style.display = '');
+                    document.querySelectorAll('.aksi-col').forEach(el => el.style.display = '');
                     element.classList.add('shadow', 'overflow-x-auto');
                 });
             }
@@ -441,326 +348,251 @@
 
         const app = {
             init() {
-                // Set default month ke filter
-                const now = new Date();
-                const monthStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0');
-                document.getElementById('filter-bulan').value = monthStr;
-
-                // Listeners untuk kalkulasi waktu otomatis
-                document.getElementById('kin-mulai').addEventListener('change', this.calcDuration);
-                document.getElementById('kin-selesai').addEventListener('change', this.calcDuration);
+                const now = new Date(); document.getElementById('filter-bulan').value = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0');
                 
-                // Sidebar toggle mobile
-                document.getElementById('btn-menu').addEventListener('click', () => {
-                    document.getElementById('sidebar').classList.toggle('-translate-x-full');
-                });
+                // Live Calculator Listener
+                document.getElementById('kin-mulai').addEventListener('change', () => this.calcDuration());
+                document.getElementById('kin-selesai').addEventListener('change', () => this.calcDuration());
+                document.getElementById('kin-tanggal').addEventListener('change', () => this.calcDuration());
+                
+                document.getElementById('btn-menu').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('-translate-x-full'));
+                
+                // Form Submit Listeners
+                document.getElementById('login-form').addEventListener('submit', this.login);
+                document.getElementById('form-rencana').addEventListener('submit', this.saveRencana);
+                document.getElementById('form-kinerja').addEventListener('submit', this.saveKinerja);
+                document.getElementById('form-edit-kinerja').addEventListener('submit', this.saveEditKinerja);
+                document.getElementById('form-pegawai').addEventListener('submit', this.savePegawai);
             },
 
-            // --- AUTH ---
-            async login(e) {
+            async login(e) { 
                 e.preventDefault();
-                const nip = document.getElementById('login-nip').value;
-                const btnText = document.getElementById('login-text');
-                const spin = document.getElementById('login-spin');
-                
-                btnText.innerText = "Memproses...";
-                ui.show('login-spin');
-
                 try {
-                    const res = await api.request('login', { nip });
-                    state.user = res.user;
-                    
-                    document.getElementById('user-name').innerText = state.user.nama;
+                    ui.show('login-spin');
+                    document.getElementById('login-text').innerText = 'Memverifikasi...';
+                    const res = await api.request('login', { nip: document.getElementById('login-nip').value });
+                    state.user = res.user; 
+                    document.getElementById('user-name').innerText = state.user.nama; 
                     document.getElementById('user-role').innerText = state.user.role;
                     
-                    ui.hide('view-login');
-                    ui.show('view-app');
-                    ui.setupMenu();
-                    ui.navigate('page-dashboard');
-                    ui.toast(`Selamat datang, ${state.user.nama}`);
-                } catch (err) {
-                    // do nothing, toast handles error
-                } finally {
-                    btnText.innerText = "Masuk / Login";
-                    ui.hide('login-spin');
+                    if (state.user.role === 'admin') app.loadPegawaiDropdown();
+                    
+                    ui.hide('view-login'); ui.show('view-app'); ui.setupMenu(); ui.navigate('page-dashboard');
+                } catch (err) { } finally { 
+                    ui.hide('login-spin'); 
+                    document.getElementById('login-text').innerText = 'Masuk Sistem';
                 }
             },
+            logout() { state.user = null; ui.hide('view-app'); ui.show('view-login'); document.getElementById('login-nip').value = ''; },
 
-            logout() {
-                state.user = null;
-                ui.hide('view-app');
-                ui.show('view-login');
-                document.getElementById('login-nip').value = '';
-            },
-
-            // --- DASHBOARD ---
             async loadDashboard() {
                 try {
                     const res = await api.request('getDashboard', { role: state.user.role, nip: state.user.nip });
-                    document.getElementById('stat-total').innerText = res.data.totalKinerjaBulanIni;
-                    document.getElementById('stat-tercapai').innerText = res.data.kinerjaTercapai;
+                    document.getElementById('stat-total').innerText = res.data.totalKinerjaBulanIni; 
+                    document.getElementById('stat-tercapai').innerText = res.data.kinerjaTercapai; 
                     document.getElementById('stat-belum').innerText = res.data.kinerjaBelumTercapai;
-                } catch (e) { console.error(e); }
+                } catch (e) {}
             },
 
-            // --- PEGAWAI (ADMIN) ---
+            // Pegawai Handlers (Admin)
             async loadPegawai() {
-                try {
-                    const res = await api.request('getPegawai');
-                    state.pegawaiList = res.data;
-                    
-                    // Render tabel
-                    const tbody = document.getElementById('table-pegawai');
-                    tbody.innerHTML = res.data.map(p => `
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">${p.nip}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">${p.nama}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">${p.jabatan}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
-                                <button onclick="app.editPegawai('${p.nip}', '${p.nama}', '${p.jabatan}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
-                                <button onclick="app.deletePegawai('${p.nip}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
-                            </td>
-                        </tr>
-                    `).join('');
-
-                    // Update filter select
-                    const filter = document.getElementById('filter-pegawai');
-                    filter.innerHTML = `<option value="all">Semua Pegawai</option>` + 
-                        res.data.map(p => `<option value="${p.nip}">${p.nama}</option>`).join('');
-                } catch(e) { console.error(e); }
+                const res = await api.request('getPegawai');
+                const tb = document.getElementById('table-pegawai');
+                tb.innerHTML = res.data.map(p => `<tr>
+                    <td class="p-3">${p.nip}</td><td class="p-3">${p.nama}</td><td class="p-3">${p.jabatan}</td>
+                    <td class="p-3"><button onclick="app.deletePegawai('${p.nip}')" class="text-red-600 font-bold hover:underline"><i class="fas fa-trash"></i> Hapus</button></td>
+                </tr>`).join('');
             },
-
             async savePegawai(e) {
                 e.preventDefault();
-                const payload = {
-                    nip: document.getElementById('peg-nip').value,
-                    nama: document.getElementById('peg-nama').value,
-                    jabatan: document.getElementById('peg-jabatan').value
-                };
-                
-                try {
-                    const res = await api.request('savePegawai', payload);
-                    ui.toast(res.message);
-                    ui.hideModal('modal-pegawai');
-                    this.loadPegawai();
-                } catch(e) {}
+                await api.request('savePegawai', { nip: document.getElementById('peg-nip').value, nama: document.getElementById('peg-nama').value, jabatan: document.getElementById('peg-jabatan').value });
+                ui.toast('Pegawai disimpan'); ui.hideModal('modal-pegawai'); document.getElementById('form-pegawai').reset(); app.loadPegawai(); app.loadPegawaiDropdown();
             },
-
-            editPegawai(nip, nama, jabatan) {
-                document.getElementById('peg-nip').value = nip;
-                document.getElementById('peg-nama').value = nama;
-                document.getElementById('peg-jabatan').value = jabatan;
-                ui.showModal('modal-pegawai');
-            },
-
             async deletePegawai(nip) {
-                if(!confirm('Hapus pegawai ini?')) return;
-                try {
-                    const res = await api.request('deletePegawai', { nip });
-                    ui.toast(res.message);
-                    this.loadPegawai();
-                } catch(e){}
+                if(!confirm('Hapus akun pegawai ini?')) return;
+                await api.request('deletePegawai', { nip }); ui.toast('Dihapus'); app.loadPegawai(); app.loadPegawaiDropdown();
+            },
+            async loadPegawaiDropdown() {
+                const res = await api.request('getPegawai');
+                document.getElementById('filter-pegawai').innerHTML = '<option value="all">Semua Pegawai</option>' + res.data.map(p => `<option value="${p.nip}">${p.nama}</option>`).join('');
             },
 
-            // --- RENCANA AKSI (PEGAWAI) ---
             async loadRencanaAksi() {
-                try {
-                    const res = await api.request('getRencanaAksi', { nip: state.user.nip });
-                    state.rencanaAksiList = res.data;
-                    
-                    const ul = document.getElementById('list-rencana');
-                    ul.innerHTML = res.data.length === 0 ? '<li class="p-4 text-gray-500 text-center">Belum ada rencana aksi.</li>' : 
-                        res.data.map(r => `<li class="p-4 flex justify-between items-center text-sm">
-                            <span><i class="fas fa-check text-green-500 mr-2"></i> ${r}</span>
-                        </li>`).join('');
-                } catch(e) {}
+                const res = await api.request('getRencanaAksi', { nip: state.user.nip });
+                document.getElementById('list-rencana').innerHTML = res.data.map(r => `<li class="p-3 border-b hover:bg-gray-50"><i class="fas fa-check text-green-500 mr-2"></i> ${r}</li>`).join('');
             },
-
-            async saveRencanaAksi(e) {
+            async saveRencana(e) {
                 e.preventDefault();
-                const input = document.getElementById('input-rencana');
-                if(!input.value.trim()) return;
-
-                try {
-                    await api.request('saveRencanaAksi', { nip: state.user.nip, rencana: input.value });
-                    ui.toast('Rencana berhasil disimpan');
-                    input.value = '';
-                    this.loadRencanaAksi();
-                } catch(e){}
+                await api.request('saveRencanaAksi', { nip: state.user.nip, rencana: document.getElementById('input-rencana').value });
+                ui.toast('Rencana Disimpan'); document.getElementById('input-rencana').value=''; app.loadRencanaAksi();
             },
 
-            // --- KINERJA HARIAN ---
             async prepareFormKinerja() {
-                // Pastikan load rencana aksi dulu untuk select box
                 try {
                     const res = await api.request('getRencanaAksi', { nip: state.user.nip });
-                    const select = document.getElementById('kin-rencana');
-                    select.innerHTML = '<option value="">-- Pilih Rencana Aksi --</option>' + 
-                        res.data.map(r => `<option value="${r}">${r}</option>`).join('');
+                    document.getElementById('kin-rencana').innerHTML = '<option value="">-- Pilih Rencana Aksi --</option>' + res.data.map(r => `<option value="${r}">${r}</option>`).join('');
+                    
+                    const now = new Date(); const monthStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0');
+                    const kinerjaRes = await api.request('getKinerja', { month: monthStr, nip: state.user.nip });
+                    state.kinerjaBulanIni = kinerjaRes.data || [];
                 } catch(e){}
-                
-                // Reset date to today
                 document.getElementById('kin-tanggal').valueAsDate = new Date();
-                this.calcDuration(); // Reset badge
+                this.calcDuration();
             },
 
             calcDuration() {
-                const start = document.getElementById('kin-mulai').value;
-                const end = document.getElementById('kin-selesai').value;
-                const badge = document.getElementById('kin-badge');
-                const durText = document.getElementById('kin-durasi');
+                const start = document.getElementById('kin-mulai').value; const end = document.getElementById('kin-selesai').value; const tanggal = document.getElementById('kin-tanggal').value;
+                const badge = document.getElementById('kin-badge'); const durText = document.getElementById('kin-durasi'); const akumulasiText = document.getElementById('kin-akumulasi-sebelumnya');
 
-                if (start && end) {
-                    const dStart = new Date(`2000-01-01T${start}`);
-                    const dEnd = new Date(`2000-01-01T${end}`);
-                    const diffMs = dEnd - dStart;
-                    
-                    if (diffMs < 0) {
-                        durText.innerText = "Error (Selesai < Mulai)";
-                        badge.className = "ml-2 px-2 py-1 rounded text-xs font-bold bg-red-200 text-red-800";
-                        badge.innerText = "Tidak Valid";
-                        return;
-                    }
-
-                    const mins = Math.floor(diffMs / 60000);
-                    const hours = Math.floor(mins / 60);
-                    const remMins = mins % 60;
-                    
-                    durText.innerText = `${hours} Jam ${remMins} Menit (${mins} Menit)`;
-                    
-                    if (mins >= 450) { // 7.5 jam = 450 menit
-                        badge.className = "ml-2 px-2 py-1 rounded text-xs font-bold bg-green-500 text-white";
-                        badge.innerText = "Tercapai";
-                    } else {
-                        badge.className = "ml-2 px-2 py-1 rounded text-xs font-bold bg-red-500 text-white";
-                        badge.innerText = "Belum Tercapai";
-                    }
+                let totalSebelumnya = 0;
+                if (state.kinerjaBulanIni && tanggal) {
+                    state.kinerjaBulanIni.forEach(k => { if (k.tanggal === tanggal) totalSebelumnya += (parseInt(k.menit) || 0); });
                 }
+                akumulasiText.innerText = `${Math.floor(totalSebelumnya/60)} Jam ${totalSebelumnya%60} Menit (${totalSebelumnya} Menit)`;
+
+                let minsCurrent = 0;
+                if (start && end) {
+                    const diffMs = new Date(`2000-01-01T${end}`) - new Date(`2000-01-01T${start}`);
+                    if (diffMs < 0) { durText.innerText = "Error Waktu Mundur"; badge.className="ml-2 px-2 py-1 bg-red-200 text-red-800 rounded text-xs"; return; }
+                    minsCurrent = Math.floor(diffMs / 60000);
+                }
+
+                const totalHariIni = totalSebelumnya + minsCurrent; 
+                durText.innerText = `${Math.floor(totalHariIni / 60)} Jam ${totalHariIni % 60} Menit (${totalHariIni} Menit)`;
+                
+                if (totalHariIni >= 450) { badge.className = "ml-2 px-2 py-1 rounded text-xs font-bold bg-green-500 text-white shadow-sm"; badge.innerText = "Tercapai (≥ 7.5 Jam)"; } 
+                else { badge.className = "ml-2 px-2 py-1 rounded text-xs font-bold bg-red-500 text-white shadow-sm"; badge.innerText = "Belum Tercapai"; }
             },
 
             async saveKinerja(e) {
                 e.preventDefault();
-                
-                const start = document.getElementById('kin-mulai').value;
-                const end = document.getElementById('kin-selesai').value;
+                const start = document.getElementById('kin-mulai').value; const end = document.getElementById('kin-selesai').value;
                 const mins = Math.floor((new Date(`2000-01-01T${end}`) - new Date(`2000-01-01T${start}`)) / 60000);
+                if (mins < 0) return ui.toast("Format waktu salah!", "error");
 
-                if (mins < 0) { ui.toast("Waktu tidak valid!", "error"); return; }
-
-                const payload = {
-                    nip: state.user.nip,
-                    nama: state.user.nama,
-                    rencana: document.getElementById('kin-rencana').value,
-                    tanggal: document.getElementById('kin-tanggal').value,
-                    jamMulai: start,
-                    jamSelesai: end,
-                    uraian: document.getElementById('kin-uraian').value,
-                    realisasi: document.getElementById('kin-realisasi').value,
-                    bukti: document.getElementById('kin-bukti').value,
-                    jumlahJamMenit: mins,
-                    status: mins >= 450 ? 'Tercapai' : 'Belum Tercapai'
-                };
-
-                const btn = document.getElementById('btn-submit-kinerja');
-                btn.disabled = true; btn.innerText = "Menyimpan...";
-
+                document.getElementById('btn-submit-kinerja').innerText = "Menyimpan...";
                 try {
-                    const res = await api.request('saveKinerja', payload);
-                    ui.toast(res.message);
-                    document.getElementById('form-kinerja').reset();
-                    this.prepareFormKinerja(); // reset date to today
-                } catch(e) {} finally {
-                    btn.disabled = false; btn.innerHTML = "<span>Simpan Kinerja</span>";
-                }
+                    await api.request('saveKinerja', { 
+                        nip: state.user.nip, nama: state.user.nama, rencana: document.getElementById('kin-rencana').value, tanggal: document.getElementById('kin-tanggal').value, 
+                        jamMulai: start, jamSelesai: end, uraian: document.getElementById('kin-uraian').value, realisasi: document.getElementById('kin-realisasi').value, bukti: document.getElementById('kin-bukti').value, 
+                        jumlahJamMenit: mins, status: 'Aktif' 
+                    });
+                    ui.toast('Berhasil Disimpan'); document.getElementById('form-kinerja').reset(); app.prepareFormKinerja();
+                } catch(e) {} finally { document.getElementById('btn-submit-kinerja').innerText = "Simpan Kinerja"; }
             },
 
             async loadKinerja() {
-                const month = document.getElementById('filter-bulan').value;
-                let nipFilter = state.user.role === 'admin' ? document.getElementById('filter-pegawai').value : state.user.nip;
-                
-                const tbody = document.getElementById('table-rekap');
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Memuat data...</td></tr>';
-
+                const tbody = document.getElementById('table-rekap'); tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8">Memuat data secara realtime...</td></tr>';
                 try {
-                    const res = await api.request('getKinerja', { month: month, nip: nipFilter });
+                    const res = await api.request('getKinerja', { month: document.getElementById('filter-bulan').value, nip: state.user.role === 'admin' ? document.getElementById('filter-pegawai').value : state.user.nip });
+                    state.rawKinerjaData = res.data || [];
                     
-                    if (res.data.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">Tidak ada catatan kinerja di bulan ini.</td></tr>`;
-                        return;
-                    }
+                    if (res.data.length === 0) return tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-gray-500">Tidak ada catatan kinerja.</td></tr>`;
 
-                    // PENGELOMPOKKAN DATA BERDASARKAN TANGGAL & NIP UNTUK AKUMULASI JAM HARIAN
+                    // PEMBERSIH FORMAT 1899 DARI GOOGLE SHEET
+                    const cleanTime = (t) => {
+                        let str = String(t || "-"); if (str.startsWith("'")) str = str.substring(1); 
+                        if (str.includes("T")) { const m = str.match(/T(\d{2}:\d{2})/); return m ? m[1] : str; }
+                        return str.substring(0, 5);
+                    };
+
+                    // PENGELOMPOKAN BERDASARKAN TANGGAL UNTUK CEK TOTAL 7,5 JAM
                     const grouped = {};
                     res.data.forEach(k => {
                         const key = `${k.tanggal}_${k.nip}`;
-                        if (!grouped[key]) {
-                            grouped[key] = { nip: k.nip, nama: k.nama, tanggal: k.tanggal, items: [], totalMenit: 0 };
-                        }
-                        grouped[key].items.push(k);
-                        grouped[key].totalMenit += (parseInt(k.menit) || 0);
+                        if (!grouped[key]) grouped[key] = { nip: k.nip, nama: k.nama, tanggal: k.tanggal, items: [], totalMenit: 0 };
+                        grouped[key].items.push(k); grouped[key].totalMenit += (parseInt(k.menit) || 0);
                     });
 
-                    let html = '';
-                    let no = 1;
-
-                    // Render Tabel
+                    let html = ''; let no = 1;
                     for (const key in grouped) {
                         const group = grouped[key];
-                        // Cek status akumulasi harian (7,5 jam = 450 menit)
                         const isTercapai = group.totalMenit >= 450;
-                        const statusClass = isTercapai ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100';
-                        const statusText = isTercapai ? 'Tercapai' : 'Belum Tercapai';
-                        const totalJamHarianStr = Math.floor(group.totalMenit / 60) + ' J ' + (group.totalMenit % 60) + ' M';
+                        const statusBadge = isTercapai ? `<span style="color:#059669; font-weight:900;">Tercapai</span>` : `<span style="color:#dc2626; font-weight:900;">Belum Tercapai</span>`;
+                        const totalJamStr = Math.floor(group.totalMenit / 60) + ' Jam ' + (group.totalMenit % 60) + ' Menit';
 
                         group.items.forEach((k, index) => {
-                            const jamKegiatanStr = Math.floor(k.menit / 60) + ' J ' + (k.menit % 60) + ' M';
+                            const kegiatanJam = Math.floor(k.menit / 60) + ' J ' + (k.menit % 60) + ' M';
                             
-                            // Gunakan helper cleanTime untuk membersihkan error format 1899
-                            const displayMulai = cleanTime(k.jamMulai);
-                            const displaySelesai = cleanTime(k.jamSelesai);
-                            
+                            // Tombol Edit/Delete hanya aktif untuk admin ATAU pemilik data
+                            const btnAksi = (state.user.role === 'admin' || state.user.nip === k.nip) 
+                                ? `<button onclick="app.editKinerja('${k.id}')" class="text-blue-600 p-1 mx-1 hover:bg-blue-100 rounded" title="Edit"><i class="fas fa-edit"></i></button>
+                                   <button onclick="app.deleteKinerja('${k.id}', '${k.nip}')" class="text-red-600 p-1 mx-1 hover:bg-red-100 rounded" title="Hapus"><i class="fas fa-trash"></i></button>`
+                                : `-`;
+
                             html += `
-                            <tr class="border-b">
-                                ${index === 0 ? `<td class="p-2 border border-gray-400 text-center align-top" rowspan="${group.items.length}">${no++}</td>` : ''}
-                                
-                                ${state.user.role === 'admin' 
-                                    ? (index === 0 ? `<td class="p-2 border border-gray-400 text-sm font-medium align-top" rowspan="${group.items.length}">${k.nama}</td>` : '') 
-                                    : ''}
-                                
-                                ${index === 0 ? `<td class="p-2 border border-gray-400 text-sm whitespace-nowrap align-top" rowspan="${group.items.length}">${k.tanggal}</td>` : ''}
-                                
-                                <td class="p-2 border border-gray-400 text-sm align-top">${k.rencana}</td>
-                                <td class="p-2 border border-gray-400 text-sm text-center font-medium align-top whitespace-nowrap">${displayMulai} - ${displaySelesai}</td>
-                                <td class="p-2 border border-gray-400 text-sm align-top" style="max-width: 250px; white-space: normal; word-wrap: break-word;">${k.uraian}</td>
-                                <td class="p-2 border border-gray-400 text-sm text-center align-top whitespace-nowrap">${jamKegiatanStr}</td>
-                                
-                                ${index === 0 ? `<td class="p-2 text-sm text-center align-middle border border-gray-400 bg-gray-50" rowspan="${group.items.length}">
-                                    <div class="font-bold text-gray-800 text-base mb-1">${totalJamHarianStr}</div>
-                                    <div class="font-bold px-2 py-1 rounded inline-block ${statusClass}">${statusText}</div>
+                            <tr class="hover:bg-gray-50 transition">
+                                ${index === 0 ? `<td rowspan="${group.items.length}" style="text-align:center;">${no++}</td>` : ''}
+                                ${state.user.role === 'admin' ? (index === 0 ? `<td rowspan="${group.items.length}" class="admin-only-col font-medium">${k.nama}</td>` : '') : ''}
+                                ${index === 0 ? `<td rowspan="${group.items.length}" class="whitespace-nowrap">${k.tanggal}</td>` : ''}
+                                <td>${k.rencana}</td>
+                                <td style="text-align:center; font-weight:bold; white-space:nowrap;">${cleanTime(k.jamMulai)} - ${cleanTime(k.jamSelesai)}</td>
+                                <td style="text-align:left; word-break: break-word;">${k.uraian}</td>
+                                <td style="text-align:center; font-weight:500;">${kegiatanJam}</td>
+                                ${index === 0 ? `<td rowspan="${group.items.length}" style="text-align:center; vertical-align:middle; background-color:#f8fafc; border-left: 2px solid #e2e8f0;">
+                                    <div style="font-size:14px; font-weight:bold; margin-bottom: 4px;">${totalJamStr}</div>
+                                    <div>${statusBadge}</div>
                                 </td>` : ''}
-                            </tr>
-                            `;
+                                <td class="aksi-col no-print" style="text-align:center; white-space:nowrap;">${btnAksi}</td>
+                            </tr>`;
                         });
                     }
-
                     tbody.innerHTML = html;
+                } catch(e) { tbody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 font-bold py-4">Error memuat data</td></tr>`; }
+            },
 
-                } catch(e) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">Gagal memuat data</td></tr>`;
-                }
+            editKinerja(id) {
+                const item = state.rawKinerjaData.find(k => k.id === id);
+                if (!item) return;
+
+                const cleanTime = (t) => {
+                    let str = String(t || ""); if (str.startsWith("'")) str = str.substring(1); 
+                    if (str.includes("T")) { const m = str.match(/T(\d{2}:\d{2})/); return m ? m[1] : str; }
+                    return str.substring(0, 5);
+                };
+
+                document.getElementById('edit-kin-id').value = id;
+                document.getElementById('edit-kin-rencana').value = item.rencana;
+                document.getElementById('edit-kin-tanggal').value = item.tanggal;
+                document.getElementById('edit-kin-mulai').value = cleanTime(item.jamMulai);
+                document.getElementById('edit-kin-selesai').value = cleanTime(item.jamSelesai);
+                document.getElementById('edit-kin-uraian').value = item.uraian;
+                document.getElementById('edit-kin-realisasi').value = item.realisasi;
+                document.getElementById('edit-kin-bukti').value = item.bukti;
+                ui.showModal('modal-edit-kinerja');
+            },
+
+            async saveEditKinerja(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btn-save-edit');
+                btn.innerText = "Memproses...";
+                
+                const id = document.getElementById('edit-kin-id').value;
+                const nipTarget = state.rawKinerjaData.find(k => k.id === id)?.nip || state.user.nip;
+                const start = document.getElementById('edit-kin-mulai').value; 
+                const end = document.getElementById('edit-kin-selesai').value;
+                const mins = Math.floor((new Date(`2000-01-01T${end}`) - new Date(`2000-01-01T${start}`)) / 60000);
+                
+                try {
+                    await api.request('updateKinerja', {
+                        id: id, nip: nipTarget, rencana: document.getElementById('edit-kin-rencana').value, tanggal: document.getElementById('edit-kin-tanggal').value,
+                        jamMulai: start, jamSelesai: end, uraian: document.getElementById('edit-kin-uraian').value, realisasi: document.getElementById('edit-kin-realisasi').value,
+                        bukti: document.getElementById('edit-kin-bukti').value, jumlahJamMenit: mins
+                    });
+                    ui.toast('Data Berhasil Diperbarui'); ui.hideModal('modal-edit-kinerja'); app.loadKinerja();
+                } catch (err) {} finally { btn.innerText = "Update Data"; }
+            },
+
+            async deleteKinerja(id, nip) {
+                if(!confirm("Yakin ingin HAPUS catatan kinerja ini secara permanen?")) return;
+                try {
+                    await api.request('deleteKinerja', { id: id, nip: nip });
+                    ui.toast('Data Dihapus'); app.loadKinerja();
+                } catch(e) {}
             }
         };
 
-        document.getElementById('login-form').addEventListener('submit', (e) => app.login(e));
-        document.getElementById('form-pegawai').addEventListener('submit', (e) => app.savePegawai(e));
-        document.getElementById('form-rencana').addEventListener('submit', (e) => app.saveRencanaAksi(e));
-        document.getElementById('form-kinerja').addEventListener('submit', (e) => app.saveKinerja(e));
-
-        // Inisialisasi awal
-        window.addEventListener('DOMContentLoaded', () => {
-            app.init();
-        });
-
+        window.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
 </html>
