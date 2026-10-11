@@ -314,7 +314,11 @@
             },
             
             cetakPDF() {
-                document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = 'block');
+                // 1. Tampilkan elemen khusus print (Kop surat, Info pegawai) secara paksa
+                document.querySelectorAll('.no-screen-kop').forEach(el => el.classList.remove('hidden'));
+                
+                // 2. Sembunyikan elemen yang TIDAK PERLU diprint (Kolom Aksi Edit/Delete)
+                document.querySelectorAll('.no-print').forEach(el => el.classList.add('hidden'));
                 
                 let bulan = document.getElementById('filter-bulan').value || 'Semua Waktu';
                 document.getElementById('print-subtitle').innerText = 'Bulan: ' + bulan;
@@ -333,8 +337,11 @@
                     jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } 
                 };
 
+                // Proses generate PDF
                 html2pdf().set(opt).from(element).save().then(() => {
-                    document.querySelectorAll('.no-screen-kop').forEach(el => el.style.display = '');
+                    // 3. Kembalikan ke tampilan layar web normal setelah download PDF selesai
+                    document.querySelectorAll('.no-screen-kop').forEach(el => el.classList.add('hidden'));
+                    document.querySelectorAll('.no-print').forEach(el => el.classList.remove('hidden'));
                     element.classList.add('shadow', 'overflow-x-auto');
                 });
             }
